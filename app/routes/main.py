@@ -47,8 +47,6 @@ def get_ai_response(ticket_id):
     if request.method == "POST":
         user_message = request.json.get("message")
         prompt = f"The user is continuing with this message: {user_message}\\nPrevious issue: {ticket.issue}"
-
-Previous issue: {ticket.issue}"
         ai_response = ask_ai(prompt)
         return jsonify({"response": ai_response})
     else:

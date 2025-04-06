@@ -1,9 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 import uuid
 from datetime import datetime
 from app.models.ticket import Ticket
 from app import db
-from app.ai.ai_assistant import ask_ai  # Import the AI function
+from app.ai.ai_assistant import ask_ai
 
 main = Blueprint("main", __name__)
 
@@ -19,18 +19,16 @@ def start_ticket():
         ticket = Ticket(ticket_id=ticket_id, issue=issue, status="open", last_updated=datetime.now())
         db.session.add(ticket)
         db.session.commit()
-
-        # Ask AI for troubleshooting suggestions
-        ai_response = ask_ai(f"The user is having the following issue: {issue}. How can we help them troubleshoot?")
-        return render_template("ticket.html", ticket=ticket, ai_response=ai_response)
-
+        return redirect(url_for("main.view_ticket", ticket_id=ticket_id))
     return render_template("start.html")
 
 @main.route("/ticket/<ticket_id>")
 def view_ticket(ticket_id):
     ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
-    
-    # Ask AI for troubleshooting suggestions based on the issue
+    return render_template("ticket.html", ticket=ticket)
+
+@main.route("/ticket/ai/<ticket_id>")
+def get_ai_response(ticket_id):
+    ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
     ai_response = ask_ai(f"The user is having the following issue: {ticket.issue}. How can we help them troubleshoot?")
-    
-    return render_template("ticket.html", ticket=ticket, ai_response=ai_response)
+    return jsonify({"response": ai_response})

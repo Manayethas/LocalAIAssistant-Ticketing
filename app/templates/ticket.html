@@ -63,28 +63,23 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const ticketId = "{{ ticket.ticket_id }}";
-  const dots = document.getElementById("dots");
-  const aiBox = document.getElementById("ai-box");
-  let dotCount = 0;
-
-  const dotInterval = setInterval(() => {
-    dotCount = (dotCount + 1) % 4;
-    dots.textContent = ".".repeat(dotCount);
-  }, 500);
+  console.log("Ticket ID:", ticketId); // ✅ Confirm it's rendering
 
   fetch(`/ticket/ai/${ticketId}/stream`)
     .then(response => {
-      clearInterval(dotInterval);
-      aiBox.innerHTML = "<p><strong>Assistant:</strong> <span id='live-output'></span></p>";
+      console.log("Stream response:", response); // ✅ Confirm fetch happens
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      const output = document.getElementById("live-output");
+      const output = document.getElementById("ai-box");
+      output.innerHTML = "<p><strong>Assistant:</strong> <span id='live-output'></span></p>";
+      const live = document.getElementById("live-output");
 
       function read() {
         reader.read().then(({ done, value }) => {
           if (done) return;
           const chunk = decoder.decode(value);
-          output.textContent += chunk;
+          console.log("Chunk:", chunk); // ✅ Log each token
+          live.textContent += chunk;
           read();
         });
       }
@@ -92,9 +87,9 @@ document.addEventListener("DOMContentLoaded", () => {
       read();
     })
     .catch(err => {
-      clearInterval(dotInterval);
-      aiBox.innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
+      console.error("Stream error:", err); // 🚨 Show fetch error
     });
 });
 </script>
+
 

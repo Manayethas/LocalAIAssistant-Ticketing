@@ -1,9 +1,10 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response, stream_with_context
 import uuid
 from datetime import datetime
+import requests
 from app.models.ticket import Ticket
 from app import db
-from app.ai.ai_assistant import ask_ai
+from app.ai.ai_assistant import OLLAMA_URL
 
 main = Blueprint("main", __name__)
 
@@ -41,18 +42,29 @@ def view_ticket(ticket_id):
     ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
     return render_template("ticket.html", ticket=ticket)
 
-@main.route("/ticket/ai/<ticket_id>", methods=["GET", "POST"])
-def get_ai_response(ticket_id):
+@main.route("/ticket/ai/<ticket_id>/stream")
+def stream_ai_response(ticket_id):
     ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
-    if request.method == "POST":
-        user_message = request.json.get("message")
-        prompt = f"Help the user with this issue: {user_message}"
-        ai_response = ask_ai(prompt)
-        return jsonify({"response": ai_response})
-    else:
-        prompt = f"Help the user with this issue: {ticket.issue}"
-        ai_response = ask_ai(prompt)
-        return jsonify({"response": ai_response})
+    prompt = f"Help the user with this issue: {ticket.issue}"
+
+    def generate():
+        try:
+            response = requests.post(OLLAMA_URL, json={
+                "model": "mistral",
+                "prompt": prompt,
+                "stream": True
+            }, stream=True)
+
+            for line in response.iter_lines():
+                if line:
+                    data = line.decode("utf-8")
+                    if data.startswith("data: "):
+                        token = data.replace("data: ", "")
+                        yield f"{token}"
+        except Exception as e:
+            yield f"\n[Error: {str(e)}]"
+
+    return Response(stream_with_context(generate()), content_type='text/plain')
 
 @main.route("/ticket/<ticket_id>/resolve", methods=["POST"])
 def mark_resolved(ticket_id):

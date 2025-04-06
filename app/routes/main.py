@@ -1,12 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response, stream_with_context, flash
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, flash
+from flask_login import login_required, current_user
+from app import db
+from app.models.ticket import Ticket
+from app.models.user import User
+from app.ai_assistant import ask_ai
 import uuid
 from datetime import datetime
-import requests
-from app.models.ticket import Ticket
-from app import db
-from app.ai.ai_assistant import OLLAMA_URL
-from flask_login import login_required, current_user
-from app.models.user import User
 import json
 
 main = Blueprint("main", __name__)
@@ -38,10 +37,7 @@ def create_ticket():
         db.session.add(ticket)
         db.session.commit()
 
-        session["ai_request_id"] = str(uuid.uuid4())
-        session["ai_request_time"] = datetime.now().timestamp()
         session["processing_ticket_id"] = ticket.id
-
         return redirect(url_for("main.waiting"))
 
     return render_template("create_ticket.html")
@@ -70,36 +66,26 @@ def ask_ai_for_help(ticket_id):
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    # Load or initialize the message history
-    current_responses = json.loads(ticket.ai_responses or "[]")
+    # Build history context
+    chat_history = [
+        f"User: {ticket.description}"
+    ]
+    existing_responses = json.loads(ticket.ai_responses or "[]")
+    for entry in existing_responses:
+        chat_history.append(f"AI: {entry['response']}")
 
-    # Prepare context-aware message list
-    messages = [{"role": "system", "content": "You are a helpful IT support assistant helping users with basic issues."}]
-    for r in current_responses:
-        if "question" in r:
-            messages.append({"role": "user", "content": r["question"]})
-        messages.append({"role": "assistant", "content": r["response"]})
-    messages.append({"role": "user", "content": question})
+    chat_history.append(f"User: {question}")
+    prompt = "\n".join(chat_history)
 
-    # Request AI response from Ollama
-    try:
-        response = requests.post(OLLAMA_URL, json={
-            "model": "mistral",
-            "messages": messages,
-            "stream": False
-        })
-        response.raise_for_status()
-        ai_response = response.json().get("message", {}).get("content", "").strip()
-    except Exception as e:
-        return jsonify({"error": f"AI request failed: {str(e)}"}), 500
+    # Ask the AI
+    ai_response = ask_ai(prompt)
 
-    # Update ticket conversation
-    current_responses.append({
+    # Save the new response
+    existing_responses.append({
         "timestamp": datetime.utcnow().isoformat(),
-        "question": question,
         "response": ai_response
     })
-    ticket.ai_responses = json.dumps(current_responses)
+    ticket.ai_responses = json.dumps(existing_responses)
 
     if "I couldn't help" in ai_response or "I don't know" in ai_response:
         ticket.requires_technician = True
@@ -120,62 +106,6 @@ def assign_technician(ticket_id):
 
     return jsonify({"message": "Technician assigned successfully"})
 
-@main.route("/ticket/ai/<int:ticket_id>/stream")
-def stream_ai_response(ticket_id):
-    ticket = Ticket.query.get_or_404(ticket_id)
-
-    # Build context message history
-    history = json.loads(ticket.ai_responses or "[]")
-    messages = [{"role": "system", "content": "You are a helpful IT support assistant helping users with basic issues."}]
-    
-    for r in history:
-        if "question" in r:
-            messages.append({"role": "user", "content": r["question"]})
-        messages.append({"role": "assistant", "content": r["response"]})
-    
-    # Append ticket description as new user prompt if no conversation yet
-    if not history:
-        messages.append({"role": "user", "content": ticket.description})
-
-    def generate():
-        try:
-            response = requests.post(OLLAMA_URL, json={
-                "model": "mistral",
-                "messages": messages,
-                "stream": True
-            }, stream=True)
-
-            full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    data = line.decode("utf-8")
-                    if data.startswith("data: "):
-                        content = data.removeprefix("data: ").strip()
-                        full_response += content
-                        yield f"data: {content}\n\n"
-
-            # Save full streamed response
-            history.append({
-                "timestamp": datetime.utcnow().isoformat(),
-                "question": ticket.description if not history else "[follow-up]",
-                "response": full_response
-            })
-            ticket.ai_responses = json.dumps(history)
-            db.session.commit()
-
-        except Exception as e:
-            yield f"data: [⚠️ AI stream error: {str(e)}]\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        content_type='text/event-stream',
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-
 @main.route("/ticket/<int:ticket_id>/resolve", methods=["POST"])
 @login_required
 def mark_resolved(ticket_id):
@@ -187,25 +117,16 @@ def mark_resolved(ticket_id):
 @main.route('/waiting')
 @login_required
 def waiting():
-    if 'ai_request_id' not in session:
+    if 'processing_ticket_id' not in session:
         return redirect(url_for('main.index'))
     return render_template('waiting.html')
 
 @main.route('/check_ai_status')
 @login_required
 def check_ai_status():
-    if 'ai_request_id' not in session:
-        return jsonify({'complete': False})
-
-    request_time = session.get('ai_request_time', 0)
-    current_time = datetime.now().timestamp()
-
-    if current_time - request_time >= 30:
-        session.pop('ai_request_id', None)
-        session.pop('ai_request_time', None)
+    if 'processing_ticket_id' in session:
         return jsonify({
             'complete': True,
             'redirect_url': url_for('main.view_ticket', ticket_id=session.get('processing_ticket_id'))
         })
-
     return jsonify({'complete': False})

@@ -123,22 +123,46 @@ def assign_technician(ticket_id):
 @main.route("/ticket/ai/<int:ticket_id>/stream")
 def stream_ai_response(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
-    prompt = f"Help the user with this issue: {ticket.description}"
+
+    # Build context message history
+    history = json.loads(ticket.ai_responses or "[]")
+    messages = [{"role": "system", "content": "You are a helpful IT support assistant helping users with basic issues."}]
+    
+    for r in history:
+        if "question" in r:
+            messages.append({"role": "user", "content": r["question"]})
+        messages.append({"role": "assistant", "content": r["response"]})
+    
+    # Append ticket description as new user prompt if no conversation yet
+    if not history:
+        messages.append({"role": "user", "content": ticket.description})
 
     def generate():
         try:
             response = requests.post(OLLAMA_URL, json={
                 "model": "mistral",
-                "prompt": prompt,
+                "messages": messages,
                 "stream": True
             }, stream=True)
 
+            full_response = ""
             for line in response.iter_lines():
                 if line:
                     data = line.decode("utf-8")
                     if data.startswith("data: "):
-                        token = data.removeprefix("data: ").strip()
-                        yield f"data: {token}\n\n"
+                        content = data.removeprefix("data: ").strip()
+                        full_response += content
+                        yield f"data: {content}\n\n"
+
+            # Save full streamed response
+            history.append({
+                "timestamp": datetime.utcnow().isoformat(),
+                "question": ticket.description if not history else "[follow-up]",
+                "response": full_response
+            })
+            ticket.ai_responses = json.dumps(history)
+            db.session.commit()
+
         except Exception as e:
             yield f"data: [⚠️ AI stream error: {str(e)}]\n\n"
 
@@ -150,6 +174,7 @@ def stream_ai_response(ticket_id):
             "X-Accel-Buffering": "no"
         }
     )
+
 
 @main.route("/ticket/<int:ticket_id>/resolve", methods=["POST"])
 @login_required

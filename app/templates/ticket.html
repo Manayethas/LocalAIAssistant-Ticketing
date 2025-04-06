@@ -7,7 +7,10 @@
 
 <h3>AI Suggested Steps:</h3>
 <div id="ai-box">
-  <p id="loading-msg">🧠 The assistant is thinking...</p>
+  <div id="loading-area">
+    <p id="loading-msg">🧠 The assistant is thinking<span id="dots"></span></p>
+    <progress id="ai-progress" max="100" value="20" style="width: 50%;"></progress>
+  </div>
 </div>
 
 <hr>
@@ -30,18 +33,41 @@
 
 <script>
   const ticketId = "{{ ticket.ticket_id }}";
+  const dots = document.getElementById("dots");
+  const progressBar = document.getElementById("ai-progress");
+  let dotCount = 0;
+  let progress = 20;
+  let dotInterval, progressInterval;
 
-  // Initial AI response
+  // Animate dots (thinking...)
+  dotInterval = setInterval(() => {
+    dotCount = (dotCount + 1) % 4;
+    dots.textContent = '.'.repeat(dotCount);
+  }, 500);
+
+  // Animate fake progress bar
+  progressInterval = setInterval(() => {
+    if (progress < 95) {
+      progress += Math.random() * 5;
+      progressBar.value = progress;
+    }
+  }, 400);
+
+  // Get AI response on page load
   fetch(`/ticket/ai/${ticketId}`)
     .then(res => res.json())
     .then(data => {
+      clearInterval(dotInterval);
+      clearInterval(progressInterval);
       document.getElementById("ai-box").innerHTML = `<p>${data.response}</p>`;
     })
     .catch(err => {
+      clearInterval(dotInterval);
+      clearInterval(progressInterval);
       document.getElementById("ai-box").innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
     });
 
-  // Send user chat input
+  // Chat follow-up
   function sendMessage() {
     const userInput = document.getElementById("user-input").value;
     const responseBox = document.getElementById("chat-response");
@@ -50,4 +76,14 @@
     fetch(`/ticket/ai/${ticketId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body
+      body: JSON.stringify({ message: userInput })
+    })
+    .then(res => res.json())
+    .then(data => {
+      responseBox.innerHTML = `<p><strong>Assistant:</strong> ${data.response}</p>`;
+    })
+    .catch(err => {
+      responseBox.innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
+    });
+  }
+</script>

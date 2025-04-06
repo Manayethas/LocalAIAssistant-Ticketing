@@ -152,17 +152,18 @@ def check_ai_status():
     if 'ai_request_id' not in session:
         return jsonify({'complete': False})
     
-    # Here you would check the actual status of the AI processing
-    # For now, we'll simulate a 30-second wait
     request_time = session.get('ai_request_time', 0)
     current_time = datetime.now().timestamp()
     
     if current_time - request_time >= 30:
+        ticket_id = session.get('processing_ticket_id')
         session.pop('ai_request_id', None)
         session.pop('ai_request_time', None)
+        session.pop('processing_ticket_id', None)
+
         return jsonify({
             'complete': True,
-            'redirect_url': url_for('main.ticket_detail', ticket_id=session.get('processing_ticket_id'))
+            'redirect_url': url_for('main.view_ticket', ticket_id=ticket_id)  # ✅ fixed endpoint
         })
     
     return jsonify({'complete': False})

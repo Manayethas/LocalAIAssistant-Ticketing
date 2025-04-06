@@ -37,6 +37,7 @@ def authenticate_ad_user(username, password):
             password=password,
             auto_bind=True
         )
+        user_conn.unbind()  # Close the connection after successful bind
         
         # Check if user is in technicians group
         is_technician = False

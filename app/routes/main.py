@@ -23,7 +23,6 @@ def create_ticket():
         title = request.form.get("title")
         description = request.form.get("description")
         priority = request.form.get("priority", "medium")
-        category = request.form.get("category", "general")
         
         if not title or not description:
             flash("Title and description are required", "error")
@@ -33,9 +32,8 @@ def create_ticket():
             title=title,
             description=description,
             priority=priority,
-            category=category,
             status="open",
-            created_by=current_user.id
+            user_id=current_user.id
         )
         
         db.session.add(ticket)

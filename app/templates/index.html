@@ -1,5 +1,47 @@
-<h2>Welcome to the Help Desk</h2>
-<a href="/start">Start a New Ticket</a><br><br>
-{% if last_ticket %}
-    <a href="{{ url_for('main.view_ticket', ticket_id=last_ticket) }}">Resume My Ticket</a>
-{% endif %}
+{% extends "base.html" %}
+
+{% block title %}Welcome - AI Ticketing System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto text-center">
+        <h1 class="display-4 mb-4">Welcome to AI Ticketing System</h1>
+        <p class="lead mb-4">
+            Get instant help with our AI assistant or connect with a technician when needed.
+        </p>
+        
+        {% if current_user.is_authenticated %}
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('main.create_ticket') }}" class="btn btn-primary btn-lg">
+                            Create New Ticket
+                        </a>
+                        <a href="{{ url_for('main.list_tickets') }}" class="btn btn-outline-primary btn-lg">
+                            View My Tickets
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Get Started</h5>
+                    <p class="card-text">
+                        Please login or register to create and manage tickets.
+                    </p>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg">
+                            Login
+                        </a>
+                        <a href="{{ url_for('auth.register') }}" class="btn btn-outline-primary btn-lg">
+                            Register
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

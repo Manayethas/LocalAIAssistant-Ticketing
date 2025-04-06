@@ -5,42 +5,108 @@ import requests
 from app.models.ticket import Ticket
 from app import db
 from app.ai.ai_assistant import OLLAMA_URL
+from flask_login import login_required, current_user
+from app.models.user import User
+from app.ai_assistant import ask_ai
+import json
 
 main = Blueprint("main", __name__)
 
 @main.route("/")
 def index():
-    last_ticket = session.get('last_ticket_id')
-    return render_template("index.html", last_ticket=last_ticket)
+    return render_template("index.html")
 
-@main.route("/start", methods=["GET", "POST"])
-def start_ticket():
+@main.route("/create_ticket", methods=["GET", "POST"])
+@login_required
+def create_ticket():
     if request.method == "POST":
-        ticket_id = str(uuid.uuid4())
-        ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
-        user_agent = request.headers.get("User-Agent")
+        title = request.form.get("title")
+        description = request.form.get("description")
+        priority = request.form.get("priority", "medium")
+        
         ticket = Ticket(
-            ticket_id=ticket_id,
-            issue=request.form["issue"],
-            status="open",
-            last_updated=datetime.now(),
-            first_name=request.form["first_name"],
-            last_name=request.form["last_name"],
-            email=request.form["email"],
-            username=request.form["username"],
-            ip_address=ip_address,
-            user_agent=user_agent
+            title=title,
+            description=description,
+            priority=priority,
+            user_id=current_user.id
         )
+        
+        # Try AI assistance first
+        ai_prompt = f"Help with this issue: {description}. Provide step-by-step instructions if possible."
+        ai_response = ask_ai(ai_prompt)
+        
+        # Store AI response
+        ticket.ai_responses = json.dumps([{
+            "timestamp": datetime.utcnow().isoformat(),
+            "response": ai_response
+        }])
+        
+        # If AI can't help, mark for technician
+        if "I couldn't help" in ai_response or "I don't know" in ai_response:
+            ticket.requires_technician = True
+            
         db.session.add(ticket)
         db.session.commit()
-        session['last_ticket_id'] = ticket_id
-        return redirect(url_for("main.view_ticket", ticket_id=ticket_id))
-    return render_template("start.html")
+        
+        flash("Ticket created successfully!", "success")
+        return redirect(url_for("main.view_ticket", ticket_id=ticket.id))
+        
+    return render_template("create_ticket.html")
 
-@main.route("/ticket/<ticket_id>")
+@main.route("/ticket/<int:ticket_id>")
+@login_required
 def view_ticket(ticket_id):
-    ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
-    return render_template("ticket.html", ticket=ticket)
+    ticket = Ticket.query.get_or_404(ticket_id)
+    return render_template("view_ticket.html", ticket=ticket)
+
+@main.route("/tickets")
+@login_required
+def list_tickets():
+    if current_user.is_technician:
+        tickets = Ticket.query.filter_by(requires_technician=True).all()
+    else:
+        tickets = Ticket.query.filter_by(user_id=current_user.id).all()
+    return render_template("list_tickets.html", tickets=tickets)
+
+@main.route("/ask_ai/<int:ticket_id>", methods=["POST"])
+@login_required
+def ask_ai_for_help(ticket_id):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    question = request.form.get("question")
+    
+    if not question:
+        return jsonify({"error": "No question provided"}), 400
+        
+    ai_response = ask_ai(question)
+    
+    # Update ticket's AI responses
+    current_responses = json.loads(ticket.ai_responses or "[]")
+    current_responses.append({
+        "timestamp": datetime.utcnow().isoformat(),
+        "response": ai_response
+    })
+    ticket.ai_responses = json.dumps(current_responses)
+    
+    # If AI can't help, mark for technician
+    if "I couldn't help" in ai_response or "I don't know" in ai_response:
+        ticket.requires_technician = True
+        
+    db.session.commit()
+    
+    return jsonify({"response": ai_response})
+
+@main.route("/assign_technician/<int:ticket_id>", methods=["POST"])
+@login_required
+def assign_technician(ticket_id):
+    if not current_user.is_technician:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    ticket = Ticket.query.get_or_404(ticket_id)
+    ticket.technician_id = current_user.id
+    ticket.status = "in_progress"
+    db.session.commit()
+    
+    return jsonify({"message": "Technician assigned successfully"})
 
 @main.route("/ticket/ai/<ticket_id>/stream")
 def stream_ai_response(ticket_id):

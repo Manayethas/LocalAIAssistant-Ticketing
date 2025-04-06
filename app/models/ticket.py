@@ -3,15 +3,18 @@ from datetime import datetime
 
 class Ticket(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    ticket_id = db.Column(db.String(100), unique=True, nullable=False)
-    issue = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(50), default="open")
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
-
-    # New fields you need to add:
-    first_name = db.Column(db.String(100))
-    last_name = db.Column(db.String(100))
-    email = db.Column(db.String(120))
-    username = db.Column(db.String(100))
-    ip_address = db.Column(db.String(50))
-    user_agent = db.Column(db.Text)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), default='open')  # open, in_progress, resolved, closed
+    priority = db.Column(db.String(10), default='medium')  # low, medium, high
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    technician_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    # AI assistance history
+    ai_responses = db.Column(db.Text, nullable=True)  # Store AI responses as JSON string
+    requires_technician = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f'<Ticket {self.id}: {self.title}>'

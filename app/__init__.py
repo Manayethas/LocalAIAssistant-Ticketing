@@ -5,7 +5,12 @@ db = SQLAlchemy()
 
 def create_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tickets.db'
+
+    # ✅ Set a secure secret key for sessions
+    app.config['SECRET_KEY'] = 'this-should-be-random-and-secret'
+
+    # ✅ Database config (adjust if needed)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///../instance/tickets.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)

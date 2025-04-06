@@ -15,8 +15,20 @@ def index():
 def start_ticket():
     if request.method == "POST":
         ticket_id = str(uuid.uuid4())
-        issue = request.form["issue"]
-        ticket = Ticket(ticket_id=ticket_id, issue=issue, status="open", last_updated=datetime.now())
+        ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+        user_agent = request.headers.get("User-Agent")
+        ticket = Ticket(
+            ticket_id=ticket_id,
+            issue=request.form["issue"],
+            status="open",
+            last_updated=datetime.now(),
+            first_name=request.form["first_name"],
+            last_name=request.form["last_name"],
+            email=request.form["email"],
+            username=request.form["username"],
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         db.session.add(ticket)
         db.session.commit()
         return redirect(url_for("main.view_ticket", ticket_id=ticket_id))

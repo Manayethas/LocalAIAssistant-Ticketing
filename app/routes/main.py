@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from app.models.ticket import Ticket
 from app import db
+from app.ai.ai_assistant import ask_ai  # Import the AI function
 
 main = Blueprint("main", __name__)
 
@@ -18,10 +19,18 @@ def start_ticket():
         ticket = Ticket(ticket_id=ticket_id, issue=issue, status="open", last_updated=datetime.now())
         db.session.add(ticket)
         db.session.commit()
-        return redirect(url_for("main.view_ticket", ticket_id=ticket_id))
+
+        # Ask AI for troubleshooting suggestions
+        ai_response = ask_ai(f"The user is having the following issue: {issue}. How can we help them troubleshoot?")
+        return render_template("ticket.html", ticket=ticket, ai_response=ai_response)
+
     return render_template("start.html")
 
 @main.route("/ticket/<ticket_id>")
 def view_ticket(ticket_id):
     ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
-    return render_template("ticket.html", ticket=ticket)
+    
+    # Ask AI for troubleshooting suggestions based on the issue
+    ai_response = ask_ai(f"The user is having the following issue: {ticket.issue}. How can we help them troubleshoot?")
+    
+    return render_template("ticket.html", ticket=ticket, ai_response=ai_response)

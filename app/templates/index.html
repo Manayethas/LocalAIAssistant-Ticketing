@@ -1,2 +1,5 @@
 <h2>Welcome to the Help Desk</h2>
-<a href="/start">Start a New Ticket</a>
+<a href="/start">Start a New Ticket</a><br><br>
+{% if last_ticket %}
+    <a href="{{ url_for('main.view_ticket', ticket_id=last_ticket) }}">Resume My Ticket</a>
+{% endif %}

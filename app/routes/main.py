@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response, stream_with_context
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response, stream_with_context, flash
 import uuid
 from datetime import datetime
 import requests
@@ -23,34 +23,31 @@ def create_ticket():
         title = request.form.get("title")
         description = request.form.get("description")
         priority = request.form.get("priority", "medium")
+        category = request.form.get("category", "general")
+        
+        if not title or not description:
+            flash("Title and description are required", "error")
+            return redirect(url_for("main.create_ticket"))
         
         ticket = Ticket(
             title=title,
             description=description,
             priority=priority,
-            user_id=current_user.id
+            category=category,
+            status="open",
+            created_by=current_user.id
         )
         
-        # Try AI assistance first
-        ai_prompt = f"Help with this issue: {description}. Provide step-by-step instructions if possible."
-        ai_response = ask_ai(ai_prompt)
-        
-        # Store AI response
-        ticket.ai_responses = json.dumps([{
-            "timestamp": datetime.utcnow().isoformat(),
-            "response": ai_response
-        }])
-        
-        # If AI can't help, mark for technician
-        if "I couldn't help" in ai_response or "I don't know" in ai_response:
-            ticket.requires_technician = True
-            
         db.session.add(ticket)
         db.session.commit()
         
-        flash("Ticket created successfully!", "success")
-        return redirect(url_for("main.view_ticket", ticket_id=ticket.id))
+        # Store AI processing information in session
+        session["ai_request_id"] = str(uuid.uuid4())
+        session["ai_request_time"] = datetime.now().timestamp()
+        session["processing_ticket_id"] = ticket.id
         
+        return redirect(url_for("main.waiting"))
+    
     return render_template("create_ticket.html")
 
 @main.route("/ticket/<int:ticket_id>")
@@ -145,3 +142,29 @@ def mark_resolved(ticket_id):
     ticket.status = "resolved"
     db.session.commit()
     return redirect(url_for("main.view_ticket", ticket_id=ticket_id))
+
+@main.route('/waiting')
+def waiting():
+    if 'ai_request_id' not in session:
+        return redirect(url_for('main.index'))
+    return render_template('waiting.html')
+
+@main.route('/check_ai_status')
+def check_ai_status():
+    if 'ai_request_id' not in session:
+        return jsonify({'complete': False})
+    
+    # Here you would check the actual status of the AI processing
+    # For now, we'll simulate a 30-second wait
+    request_time = session.get('ai_request_time', 0)
+    current_time = datetime.now().timestamp()
+    
+    if current_time - request_time >= 30:
+        session.pop('ai_request_id', None)
+        session.pop('ai_request_time', None)
+        return jsonify({
+            'complete': True,
+            'redirect_url': url_for('main.ticket_detail', ticket_id=session.get('processing_ticket_id'))
+        })
+    
+    return jsonify({'complete': False})

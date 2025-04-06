@@ -33,6 +33,8 @@
     dots.textContent = ".".repeat(dotCount);
   }, 500);
 
+  console.log("🧠 Fetching stream for ticket:", ticketId);
+  
   fetch(`/ticket/ai/${ticketId}/stream`)
     .then(response => {
       clearInterval(dotInterval);

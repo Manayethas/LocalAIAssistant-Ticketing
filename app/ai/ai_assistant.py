@@ -1,6 +1,6 @@
 import requests
 
-OLLAMA_URL = "http://192.168.1.182:11434/api/generate"  # Update IP as needed
+OLLAMA_URL = "http://192.168.1.177:11434/api/generate"  # Update IP as needed
 
 def ask_ai(prompt):
     try:

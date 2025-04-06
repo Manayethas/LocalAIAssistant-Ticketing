@@ -48,4 +48,77 @@
                                 </div>
                             </div>
                         {% endfor %}
-                    {% endif %}
+                                        {% endif %}
+                </div>
+
+                <form id="ai-question-form" class="mt-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="question" placeholder="Ask a question..." required>
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h4>Ticket Actions</h4>
+            </div>
+            <div class="card-body">
+                {% if current_user.is_technician and not ticket.technician %}
+                    <form method="POST" action="{{ url_for('main.assign_technician', ticket_id=ticket.id) }}">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">Assign to Me</button>
+                    </form>
+                {% endif %}
+
+                {% if ticket.technician_id == current_user.id %}
+                    <form method="POST" action="{{ url_for('main.update_status', ticket_id=ticket.id) }}">
+                        <select name="status" class="form-select mb-2">
+                            <option value="in_progress" {% if ticket.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                            <option value="resolved" {% if ticket.status == 'resolved' %}selected{% endif %}>Resolved</option>
+                        </select>
+                        <button type="submit" class="btn btn-success w-100">Update Status</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        $('#ai-question-form').on('submit', function (e) {
+            e.preventDefault();
+            const question = $('#question').val();
+            if (!question) return;
+
+            $.post(`/ask_ai/{{ ticket.id }}`, { question: question })
+                .done(function (response) {
+                    const chatDiv = $('#ai-chat');
+                    const timestamp = new Date().toISOString();
+
+                    chatDiv.append(`
+                        <div class="mb-2">
+                            <div class="card">
+                                <div class="card-body">
+                                    <p class="card-text">${response.response}</p>
+                                    <small class="text-muted">${timestamp}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `);
+
+                    chatDiv.scrollTop(chatDiv[0].scrollHeight);
+                    $('#question').val('');
+                })
+                .fail(function () {
+                    alert('Failed to get AI response. Please try again.');
+                });
+        });
+    });
+</script>
+{% endblock %}

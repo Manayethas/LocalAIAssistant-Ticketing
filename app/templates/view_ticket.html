@@ -15,7 +15,7 @@
             <div class="card-body">
                 <h5>Description</h5>
                 <p>{{ ticket.description }}</p>
-                
+
                 <div class="mb-3">
                     <span class="badge bg-{{ 'success' if ticket.status == 'resolved' else 'warning' }}">
                         Status: {{ ticket.status }}
@@ -24,7 +24,7 @@
                         Priority: {{ ticket.priority }}
                     </span>
                 </div>
-                
+
                 {% if ticket.technician %}
                     <p>Assigned to: {{ ticket.technician.username }}</p>
                 {% endif %}
@@ -50,7 +50,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                
+
                 <form id="ai-question-form" class="mt-3">
                     <div class="input-group">
                         <input type="text" class="form-control" id="question" placeholder="Ask a question...">
@@ -60,7 +60,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
@@ -72,7 +72,7 @@
                         <button type="submit" class="btn btn-primary w-100 mb-2">Assign to Me</button>
                     </form>
                 {% endif %}
-                
+
                 {% if ticket.technician_id == current_user.id %}
                     <form method="POST" action="{{ url_for('main.update_status', ticket_id=ticket.id) }}">
                         <select name="status" class="form-select mb-2">
@@ -91,16 +91,17 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
+    const chatDiv = $('#ai-chat');
+
+    // ✅ Manual question submission
     $('#ai-question-form').on('submit', function(e) {
         e.preventDefault();
         const question = $('#question').val();
         if (!question) return;
-        
+
         $.post(`/ask_ai/{{ ticket.id }}`, { question: question })
             .done(function(response) {
-                const chatDiv = $('#ai-chat');
                 const timestamp = new Date().toISOString();
-                
                 chatDiv.append(`
                     <div class="mb-2">
                         <div class="card">
@@ -111,7 +112,6 @@ $(document).ready(function() {
                         </div>
                     </div>
                 `);
-                
                 chatDiv.scrollTop(chatDiv[0].scrollHeight);
                 $('#question').val('');
             })
@@ -119,6 +119,36 @@ $(document).ready(function() {
                 alert('Failed to get AI response. Please try again.');
             });
     });
+
+    // ✅ Stream AI if no prior responses
+    {% if not ticket.ai_responses %}
+    const streamBox = document.createElement('div');
+    streamBox.className = "mb-2";
+    streamBox.innerHTML = `
+        <div class="card">
+            <div class="card-body">
+                <p class="card-text"><span id="stream-output">🤖 Thinking...</span></p>
+                <small class="text-muted">${new Date().toISOString()}</small>
+            </div>
+        </div>
+    `;
+    chatDiv.append(streamBox);
+    chatDiv.scrollTop(chatDiv[0].scrollHeight);
+
+    const outputEl = document.getElementById("stream-output");
+    const evtSource = new EventSource("/ticket/ai/{{ ticket.id }}/stream");
+
+    evtSource.onmessage = function(e) {
+        if (outputEl.innerText === "🤖 Thinking...") outputEl.innerText = "";
+        outputEl.innerText += e.data;
+        chatDiv.scrollTop(chatDiv[0].scrollHeight);
+    };
+
+    evtSource.onerror = function(e) {
+        outputEl.innerText += "\n[⚠️ AI stream disconnected]";
+        evtSource.close();
+    };
+    {% endif %}
 });
 </script>
-{% endblock %} 
+{% endblock %}

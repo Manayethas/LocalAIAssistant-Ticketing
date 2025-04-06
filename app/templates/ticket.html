@@ -57,3 +57,42 @@
       aiBox.innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
     });
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const ticketId = "{{ ticket.ticket_id }}";
+  const dots = document.getElementById("dots");
+  const aiBox = document.getElementById("ai-box");
+  let dotCount = 0;
+
+  const dotInterval = setInterval(() => {
+    dotCount = (dotCount + 1) % 4;
+    dots.textContent = ".".repeat(dotCount);
+  }, 500);
+
+  fetch(`/ticket/ai/${ticketId}/stream`)
+    .then(response => {
+      clearInterval(dotInterval);
+      aiBox.innerHTML = "<p><strong>Assistant:</strong> <span id='live-output'></span></p>";
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const output = document.getElementById("live-output");
+
+      function read() {
+        reader.read().then(({ done, value }) => {
+          if (done) return;
+          const chunk = decoder.decode(value);
+          output.textContent += chunk;
+          read();
+        });
+      }
+
+      read();
+    })
+    .catch(err => {
+      clearInterval(dotInterval);
+      aiBox.innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
+    });
+});
+</script>
+

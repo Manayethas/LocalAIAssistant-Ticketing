@@ -7,7 +7,6 @@ from app import db
 from app.ai.ai_assistant import OLLAMA_URL
 from flask_login import login_required, current_user
 from app.models.user import User
-from app.ai_assistant import ask_ai
 import json
 
 main = Blueprint("main", __name__)
@@ -71,11 +70,33 @@ def ask_ai_for_help(ticket_id):
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    ai_response = ask_ai(question)
-
+    # Load or initialize the message history
     current_responses = json.loads(ticket.ai_responses or "[]")
+
+    # Prepare context-aware message list
+    messages = [{"role": "system", "content": "You are a helpful IT support assistant helping users with basic issues."}]
+    for r in current_responses:
+        if "question" in r:
+            messages.append({"role": "user", "content": r["question"]})
+        messages.append({"role": "assistant", "content": r["response"]})
+    messages.append({"role": "user", "content": question})
+
+    # Request AI response from Ollama
+    try:
+        response = requests.post(OLLAMA_URL, json={
+            "model": "mistral",
+            "messages": messages,
+            "stream": False
+        })
+        response.raise_for_status()
+        ai_response = response.json().get("message", {}).get("content", "").strip()
+    except Exception as e:
+        return jsonify({"error": f"AI request failed: {str(e)}"}), 500
+
+    # Update ticket conversation
     current_responses.append({
         "timestamp": datetime.utcnow().isoformat(),
+        "question": question,
         "response": ai_response
     })
     ticket.ai_responses = json.dumps(current_responses)
@@ -115,15 +136,9 @@ def stream_ai_response(ticket_id):
             for line in response.iter_lines():
                 if line:
                     data = line.decode("utf-8")
-                    try:
-                        json_data = json.loads(data)
-                        if json_data.get("done"):
-                            break
-                        token = json_data.get("response")
-                        if token:
-                            yield f"data: {token}\n\n"
-                    except json.JSONDecodeError:
-                        yield f"data: [⚠️ Invalid JSON: {data}]\n\n"
+                    if data.startswith("data: "):
+                        token = data.removeprefix("data: ").strip()
+                        yield f"data: {token}\n\n"
         except Exception as e:
             yield f"data: [⚠️ AI stream error: {str(e)}]\n\n"
 

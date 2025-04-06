@@ -69,25 +69,26 @@ def ask_ai_for_help(ticket_id):
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    ai_response = ask_ai(question)
+    # Load existing conversation
+    history = json.loads(ticket.ai_responses or "[]")
 
-    current_responses = json.loads(ticket.ai_responses or "[]")
-    current_responses.append({
+    # Ask AI with history
+    from app.ai_assistant import ask_ai
+    ai_response = ask_ai(question, history)
+
+    # Append Q&A to history
+    history.append({
         "timestamp": datetime.utcnow().isoformat(),
         "question": question,
         "response": ai_response
     })
-    ticket.ai_responses = json.dumps(current_responses)
+    ticket.ai_responses = json.dumps(history)
 
     if "I couldn't help" in ai_response or "I don't know" in ai_response:
         ticket.requires_technician = True
 
     db.session.commit()
-    return jsonify({
-        "response": ai_response,
-        "question": question,
-        "timestamp": datetime.utcnow().isoformat()
-    })
+    return jsonify({"response": ai_response})
 
 @main.route("/assign_technician/<int:ticket_id>", methods=["POST"])
 @login_required

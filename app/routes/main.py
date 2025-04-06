@@ -115,9 +115,15 @@ def stream_ai_response(ticket_id):
             for line in response.iter_lines():
                 if line:
                     data = line.decode("utf-8")
-                    if data.startswith("data: "):
-                        token = data.removeprefix("data: ").strip()
-                        yield f"data: {token}\n\n"
+                    try:
+                        json_data = json.loads(data)
+                        if json_data.get("done"):
+                            break
+                        token = json_data.get("response")
+                        if token:
+                            yield f"data: {token}\n\n"
+                    except json.JSONDecodeError:
+                        yield f"data: [⚠️ Invalid JSON: {data}]\n\n"
         except Exception as e:
             yield f"data: [⚠️ AI stream error: {str(e)}]\n\n"
 

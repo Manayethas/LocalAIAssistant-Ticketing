@@ -60,11 +60,18 @@ def stream_ai_response(ticket_id):
                     data = line.decode("utf-8")
                     if data.startswith("data: "):
                         token = data.replace("data: ", "")
-                        yield f"{token}"
+                        yield token
         except Exception as e:
             yield f"\n[Error: {str(e)}]"
 
-    return Response(stream_with_context(generate()), content_type='text/plain')
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @main.route("/ticket/<ticket_id>/resolve", methods=["POST"])
 def mark_resolved(ticket_id):

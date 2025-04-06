@@ -46,11 +46,12 @@ def get_ai_response(ticket_id):
     ticket = Ticket.query.filter_by(ticket_id=ticket_id).first_or_404()
     if request.method == "POST":
         user_message = request.json.get("message")
-        prompt = f"The user is continuing with this message: {user_message}\\nPrevious issue: {ticket.issue}"
+        prompt = f"Help the user with this issue: {user_message}"
         ai_response = ask_ai(prompt)
         return jsonify({"response": ai_response})
     else:
-        ai_response = ask_ai(f"The user is having the following issue: {ticket.issue}. How can we help them troubleshoot?")
+        prompt = f"Help the user with this issue: {ticket.issue}"
+        ai_response = ask_ai(prompt)
         return jsonify({"response": ai_response})
 
 @main.route("/ticket/<ticket_id>/resolve", methods=["POST"])

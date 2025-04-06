@@ -9,8 +9,7 @@ def ask_ai(user_question, history=None):
 
     prompt = (
         "You are an IT helpdesk assistant responding to a non-technical user. "
-        "Use plain language and guide them step-by-step. "
-        "Maintain the conversation context.\n"
+        "Use simple language and provide clear, step-by-step instructions.\n"
     )
 
     for turn in history:

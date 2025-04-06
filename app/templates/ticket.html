@@ -1,28 +1,53 @@
 <h2>Ticket ID: {{ ticket.ticket_id }}</h2>
 <p>Status: {{ ticket.status }}</p>
-<p>Issue: {{ ticket.issue }}</p>
+<p><strong>User:</strong> {{ ticket.first_name }} {{ ticket.last_name }} ({{ ticket.username }})</p>
+<p><strong>Email:</strong> {{ ticket.email }}</p>
+<p><strong>IP Address:</strong> {{ ticket.ip_address }}</p>
+<p><strong>Issue:</strong> {{ ticket.issue }}</p>
 
 <h3>AI Suggested Steps:</h3>
-
 <div id="ai-box">
-  {% if ai_response %}
-    <p>{{ ai_response }}</p>
-  {% else %}
-    <p id="loading-msg">🧠 The assistant is thinking... please wait.</p>
-  {% endif %}
+  <p id="loading-msg">🧠 The assistant is thinking...</p>
 </div>
+
+<hr>
+
+<h3>Continue Chatting with the Assistant:</h3>
+<input type="text" id="user-input" placeholder="Type your question..." style="width: 60%;">
+<button onclick="sendMessage()">Send</button>
+
+<div id="chat-response" style="margin-top: 10px;"></div>
+
+{% if ticket.status != 'resolved' %}
+<form action="{{ url_for('main.mark_resolved', ticket_id=ticket.ticket_id) }}" method="POST" style="margin-top: 20px;">
+    <button type="submit">Mark as Resolved</button>
+</form>
+{% else %}
+<p><strong>Status:</strong> ✅ This ticket has been marked as resolved.</p>
+{% endif %}
 
 <a href="/">Back to Home</a>
 
 <script>
-  // Optional: add animation or delay refresh here later
-  const loading = document.getElementById("loading-msg");
-  if (loading) {
-    // You could add animation, dots, etc.
-    let dots = 0;
-    setInterval(() => {
-      dots = (dots + 1) % 4;
-      loading.textContent = "🧠 The assistant is thinking" + ".".repeat(dots);
-    }, 500);
-  }
-</script>
+  const ticketId = "{{ ticket.ticket_id }}";
+
+  // Initial AI response
+  fetch(`/ticket/ai/${ticketId}`)
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("ai-box").innerHTML = `<p>${data.response}</p>`;
+    })
+    .catch(err => {
+      document.getElementById("ai-box").innerHTML = `<p style="color: red;">AI error: ${err}</p>`;
+    });
+
+  // Send user chat input
+  function sendMessage() {
+    const userInput = document.getElementById("user-input").value;
+    const responseBox = document.getElementById("chat-response");
+    responseBox.innerHTML = "🧠 The assistant is thinking...";
+
+    fetch(`/ticket/ai/${ticketId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body

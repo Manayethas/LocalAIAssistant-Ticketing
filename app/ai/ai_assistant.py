@@ -1,6 +1,6 @@
 import requests
 
-OLLAMA_URL = "http://192.168.1.88:11434/api/generate"  # Replace with your AI container's IP
+OLLAMA_URL = "http://192.168.1.182:11434/api/generate"  # Replace with your AI container's IP
 
 def ask_ai(prompt):
     try:

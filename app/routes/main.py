@@ -6,9 +6,12 @@ from flask_login import login_required, current_user
 from app import db
 from app.models.ticket import Ticket
 from app.models.user import User
-from app.ai_assistant import ask_ai
+from app.services.ollama_service import OllamaService
 
 main = Blueprint("main", __name__)
+
+# Initialize Ollama service
+ollama_service = OllamaService()
 
 @main.route("/")
 def index():
@@ -65,30 +68,26 @@ def list_tickets():
 def ask_ai_for_help(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
     question = request.form.get("question")
-
+    
     if not question:
         return jsonify({"error": "No question provided"}), 400
-
-    # Load existing conversation
+        
+    # Get chat history
     history = json.loads(ticket.ai_responses or "[]")
-
-    # Ask AI with history
-    from app.ai_assistant import ask_ai
-    ai_response = ask_ai(question, history)
-
-    # Append Q&A to history
-    history.append({
-        "timestamp": datetime.utcnow().isoformat(),
-        "question": question,
-        "response": ai_response
-    })
-    ticket.ai_responses = json.dumps(history)
-
-    if "I couldn't help" in ai_response or "I don't know" in ai_response:
+    
+    # Get AI response
+    response = ollama_service.chat(question, history)
+    
+    # Update ticket's AI responses
+    ollama_service.update_ticket_ai_history(ticket, question, response["response"])
+    
+    # If AI can't help, mark for technician
+    if "I couldn't help" in response["response"] or "I don't know" in response["response"]:
         ticket.requires_technician = True
-
+        
     db.session.commit()
-    return jsonify({"response": ai_response})
+    
+    return jsonify(response)
 
 @main.route("/assign_technician/<int:ticket_id>", methods=["POST"])
 @login_required

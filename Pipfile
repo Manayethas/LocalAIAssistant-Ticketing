@@ -13,6 +13,7 @@ werkzeug = "*"
 python-dotenv = "*"
 ldap3 = "*"
 alembic = "*"
+ollama = "*"
 
 [dev-packages]
 
